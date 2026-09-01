@@ -57,10 +57,15 @@
 .placed-photo span { display: none; }
 
 @media print {
-  .q-header, .q-tabs, section > .row:first-child, section > .q-card { display: none !important; }
-  body, .q-layout, .q-page, .q-page-container { background: white !important; padding: 0 !important; }
-  .page-wrap { width: 210mm; max-width: none; height: 297mm; page-break-after: always; }
+  @page { size: A4 portrait; margin: 0; }
+  html, body { width: 210mm; margin: 0 !important; padding: 0 !important; background: white !important; }
+  .q-header, .print-toolbar, .print-settings { display: none !important; }
+  .q-layout, .q-page-container, .q-page { min-height: 0 !important; margin: 0 !important; padding: 0 !important; background: white !important; }
+  .print-pages { display: block !important; width: 210mm !important; margin: 0 !important; padding: 0 !important; }
+  .print-page-column { display: block !important; width: 210mm !important; max-width: none !important; margin: 0 !important; padding: 0 !important; flex: none !important; }
+  .page-wrap { width: 210mm; max-width: none; height: 297mm; margin: 0; break-after: page; page-break-after: always; }
+  .print-page-column:last-child .page-wrap { break-after: auto; page-break-after: auto; }
   .page-label { display: none; }
-  .a4-page { width: 210mm; height: 297mm; box-shadow: none; }
-  .placed-photo { print-color-adjust: exact; }
+  .a4-page { width: 210mm !important; height: 297mm !important; aspect-ratio: auto; box-shadow: none; }
+  .placed-photo, .placed-photo-content, .placed-photo img { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
