@@ -1,14 +1,4 @@
 // Only geometry that Quasar utility classes do not provide lives here.
-.drop-area {
-  min-height: 420px;
-  border: 2px dashed transparent;
-}
-
-.drop-area--active {
-  border-color: var(--q-primary);
-  background: rgba(253, 216, 53, 0.08);
-}
-
 .photo-list {
   max-height: 560px;
   overflow-y: auto;
