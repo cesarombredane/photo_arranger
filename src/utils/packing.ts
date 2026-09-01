@@ -1,58 +1,106 @@
 import type { PackedPage, PhotoItem, Placement, SizeTemplate } from '../types'
 
 const A4 = { width: 210, height: 297 }
-type FreeRect = { x: number; y: number; width: number; height: number }
+type Rect = { x: number; y: number; width: number; height: number }
+type SizedPhoto = { photo: PhotoItem; width: number; height: number }
+type Candidate = { page: number; rect: Rect; rotated: boolean; shortSide: number; longSide: number }
 
-export function packPhotos(photos: PhotoItem[], templates: SizeTemplate[], margin = 8, gap = 3): PackedPage[] {
-  const sizes = photos.map(photo => {
-    const template = templates.find(t => t.id === photo.templateId)!
-    if (!template) return undefined
+function intersects(a: Rect, b: Rect) {
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+}
+
+function contains(outer: Rect, inner: Rect) {
+  return inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height
+}
+
+function splitFreeRects(freeRects: Rect[], used: Rect): Rect[] {
+  const split: Rect[] = []
+  for (const free of freeRects) {
+    if (!intersects(free, used)) { split.push(free); continue }
+    if (used.x > free.x) split.push({ x: free.x, y: free.y, width: used.x - free.x, height: free.height })
+    if (used.x + used.width < free.x + free.width) split.push({ x: used.x + used.width, y: free.y, width: free.x + free.width - used.x - used.width, height: free.height })
+    if (used.y > free.y) split.push({ x: free.x, y: free.y, width: free.width, height: used.y - free.y })
+    if (used.y + used.height < free.y + free.height) split.push({ x: free.x, y: used.y + used.height, width: free.width, height: free.y + free.height - used.y - used.height })
+  }
+  return split.filter((rect, index, all) => rect.width > 0.001 && rect.height > 0.001 && !all.some((other, otherIndex) => otherIndex !== index && contains(other, rect)))
+}
+
+function sizePhotos(photos: PhotoItem[], templates: SizeTemplate[], usable: Rect, gap: number): SizedPhoto[] {
+  return photos.flatMap(photo => {
+    const template = templates.find(item => item.id === photo.templateId)
+    if (!template) return []
     const cropWidth = photo.naturalWidth * (photo.crop.right - photo.crop.left) / 100
     const cropHeight = photo.naturalHeight * (photo.crop.bottom - photo.crop.top) / 100
     const ratio = cropWidth / cropHeight
-    // Templates represent a target print area rather than a forced bounding box.
-    // This prevents tall phone photos from becoming much smaller than landscape photos.
     const targetArea = template.width * template.height
     let width = Math.sqrt(targetArea * ratio)
     let height = Math.sqrt(targetArea / ratio)
-    // Very extreme panoramas still need to fit on an A4 sheet in either orientation.
-    const normalScale = Math.min(A4.width / width, A4.height / height)
-    const rotatedScale = Math.min(A4.width / height, A4.height / width)
-    const pageScale = Math.min(1, Math.max(normalScale, rotatedScale))
-    width *= pageScale
-    height *= pageScale
-    return { photo, width, height }
-  }).filter((item): item is NonNullable<typeof item> => Boolean(item))
-    .sort((a, b) => Math.max(b.width, b.height) - Math.max(a.width, a.height))
-  const pages: PackedPage[] = []
-  const freeByPage: FreeRect[][] = []
-  const usable = { x: margin, y: margin, width: A4.width - margin * 2, height: A4.height - margin * 2 }
+    const availableWidth = Math.max(0, usable.width - gap)
+    const availableHeight = Math.max(0, usable.height - gap)
+    const normalScale = Math.min(availableWidth / width, availableHeight / height)
+    const rotatedScale = Math.min(availableWidth / height, availableHeight / width)
+    const scale = Math.min(1, Math.max(normalScale, rotatedScale))
+    width *= scale
+    height *= scale
+    return [{ photo, width, height }]
+  })
+}
 
-  for (const item of sizes) {
-    let best: { page: number; rect: number; rotated: boolean; score: number } | undefined
-    for (let p = 0; p <= pages.length; p++) {
-      const rects = p === pages.length ? [usable] : freeByPage[p]
-      for (let r = 0; r < rects.length; r++) for (const rotated of [false, true]) {
+function findPosition(item: SizedPhoto, freeByPage: Rect[][], gap: number): Candidate | undefined {
+  let best: Candidate | undefined
+  for (let page = 0; page < freeByPage.length; page++) {
+    for (const rect of freeByPage[page]) {
+      for (const rotated of [false, true]) {
         const width = (rotated ? item.height : item.width) + gap
         const height = (rotated ? item.width : item.height) + gap
-        if (width <= rects[r].width && height <= rects[r].height) {
-          const score = rects[r].width * rects[r].height - width * height + p * 100000
-          if (!best || score < best.score) best = { page: p, rect: r, rotated, score }
-        }
+        if (width > rect.width + 0.001 || height > rect.height + 0.001) continue
+        const leftoverX = rect.width - width
+        const leftoverY = rect.height - height
+        const candidate = { page, rect, rotated, shortSide: Math.min(leftoverX, leftoverY), longSide: Math.max(leftoverX, leftoverY) }
+        if (!best || candidate.page < best.page || (candidate.page === best.page && (candidate.shortSide < best.shortSide || (candidate.shortSide === best.shortSide && candidate.longSide < best.longSide)))) best = candidate
       }
     }
-    if (!best) continue
-    if (best.page === pages.length) { pages.push({ placements: [] }); freeByPage.push([usable]) }
-    const rect = freeByPage[best.page].splice(best.rect, 1)[0]
-    const width = best.rotated ? item.height : item.width
-    const height = best.rotated ? item.width : item.height
-    const placement: Placement = { photo: item.photo, x: rect.x, y: rect.y, width, height, rotated: best.rotated }
-    pages[best.page].placements.push(placement)
-    const usedW = width + gap, usedH = height + gap
-    const right = { x: rect.x + usedW, y: rect.y, width: rect.width - usedW, height: usedH }
-    const below = { x: rect.x, y: rect.y + usedH, width: rect.width, height: rect.height - usedH }
-    if (right.width > 0 && right.height > 0) freeByPage[best.page].push(right)
-    if (below.width > 0 && below.height > 0) freeByPage[best.page].push(below)
+  }
+  return best
+}
+
+function packOrdered(items: SizedPhoto[], usable: Rect, gap: number): PackedPage[] {
+  const pages: PackedPage[] = []
+  const freeByPage: Rect[][] = []
+  for (const item of items) {
+    let candidate = findPosition(item, freeByPage, gap)
+    if (!candidate) {
+      pages.push({ placements: [] })
+      freeByPage.push([{ ...usable }])
+      candidate = findPosition(item, freeByPage, gap)
+    }
+    if (!candidate) continue
+    const width = candidate.rotated ? item.height : item.width
+    const height = candidate.rotated ? item.width : item.height
+    const placement: Placement = { photo: item.photo, x: candidate.rect.x, y: candidate.rect.y, width, height, rotated: candidate.rotated }
+    pages[candidate.page].placements.push(placement)
+    const occupied = { x: candidate.rect.x, y: candidate.rect.y, width: width + gap, height: height + gap }
+    freeByPage[candidate.page] = splitFreeRects(freeByPage[candidate.page], occupied)
   }
   return pages
+}
+
+function layoutScore(pages: PackedPage[]) {
+  const last = pages.at(-1)
+  const lastBottom = last?.placements.reduce((maximum, placement) => Math.max(maximum, placement.y + placement.height), 0) ?? 0
+  return pages.length * 1_000_000 + lastBottom
+}
+
+export function packPhotos(photos: PhotoItem[], templates: SizeTemplate[], margin = 0, gap = 0): PackedPage[] {
+  const usable = { x: margin, y: margin, width: A4.width - margin * 2, height: A4.height - margin * 2 }
+  if (usable.width <= 0 || usable.height <= 0) return []
+  const items = sizePhotos(photos, templates, usable, gap)
+  const orderings = [
+    [...items].sort((a, b) => b.width * b.height - a.width * a.height),
+    [...items].sort((a, b) => Math.max(b.width, b.height) - Math.max(a.width, a.height)),
+    [...items].sort((a, b) => b.height - a.height),
+    [...items].sort((a, b) => b.width - a.width),
+    [...items].sort((a, b) => Math.abs(Math.log(b.width / b.height)) - Math.abs(Math.log(a.width / a.height)))
+  ]
+  return orderings.map(order => packOrdered(order, usable, gap)).sort((a, b) => layoutScore(a) - layoutScore(b))[0] ?? []
 }
