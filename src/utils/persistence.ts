@@ -8,8 +8,6 @@ const STEP_KEY = 'photo-arranger:step'
 interface StoredProject {
   photos: Omit<PhotoItem, 'url'>[]
   activeIndex: number
-  gap: number
-  margin: number
 }
 
 function database(): Promise<IDBDatabase> {

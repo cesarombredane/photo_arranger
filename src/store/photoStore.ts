@@ -9,9 +9,7 @@ export const state = reactive({
     { id: 'medium', name: 'Medium photo', width: 105, height: 148, color: '#fdd835' },
     { id: 'big', name: 'Big photo', width: 210, height: 148, color: '#fdd835' }
   ] as SizeTemplate[],
-  activeIndex: 0,
-  gap: 0,
-  margin: 0
+  activeIndex: 0
 })
 
 export const activePhoto = computed(() => state.photos[state.activeIndex])
@@ -36,7 +34,7 @@ export async function importFiles(files: File[]) {
 }
 
 export function persistProject() {
-  saveProject({ photos: state.photos.map(({ url: _url, ...photo }) => photo), activeIndex: state.activeIndex, gap: state.gap, margin: state.margin })
+  saveProject({ photos: state.photos.map(({ url: _url, ...photo }) => photo), activeIndex: state.activeIndex })
 }
 
 export async function restoreProject() {
@@ -49,15 +47,11 @@ export async function restoreProject() {
   }
   state.photos = restored
   state.activeIndex = Math.min(saved.activeIndex, Math.max(0, restored.length - 1))
-  state.gap = saved.gap
-  state.margin = saved.margin
 }
 
 export async function resetProject() {
   state.photos.forEach(photo => URL.revokeObjectURL(photo.url))
   state.photos = []
   state.activeIndex = 0
-  state.gap = 0
-  state.margin = 0
   await clearSavedProject()
 }

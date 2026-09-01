@@ -39,6 +39,20 @@
 }
 .crop-handle--left, .crop-handle--right { width: 8px; min-height: 24px; cursor: ew-resize; transform: translate(-50%, 0); }
 .crop-handle--top, .crop-handle--bottom { height: 8px; min-width: 24px; cursor: ns-resize; transform: translate(0, -50%); }
+.crop-corner {
+  position: absolute;
+  z-index: 3;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 2px solid #212121;
+  border-radius: 2px;
+  background: var(--q-primary);
+  transform: translate(-50%, -50%);
+  touch-action: none;
+}
+.crop-corner--top-left, .crop-corner--bottom-right { cursor: nwse-resize; }
+.crop-corner--top-right, .crop-corner--bottom-left { cursor: nesw-resize; }
 
 .page-wrap { max-width: 440px; margin: auto; }
 .page-label { margin-bottom: 8px; font-size: 12px; font-weight: 700; }
@@ -51,7 +65,8 @@
   background: white;
   box-shadow: 0 4px 12px #0008;
 }
-.placed-photo { position: absolute; overflow: hidden; border: 0.5px solid #ddd; }
+.placed-photo { position: absolute; overflow: hidden; padding: 0; border: 0.5px solid #ddd; background: transparent; cursor: pointer; }
+.placed-photo:hover { outline: 2px solid var(--q-primary); outline-offset: -2px; }
 .placed-photo-content { position: absolute; overflow: hidden; transform-origin: center; }
 .placed-photo-content img { position: absolute; max-width: none; }
 .placed-photo span { display: none; }
@@ -59,7 +74,7 @@
 @media print {
   @page { size: A4 portrait; margin: 0; }
   html, body { width: 210mm; margin: 0 !important; padding: 0 !important; background: white !important; }
-  .q-header, .print-toolbar, .print-settings { display: none !important; }
+  .q-header, .print-toolbar { display: none !important; }
   .q-layout, .q-page-container, .q-page { min-height: 0 !important; margin: 0 !important; padding: 0 !important; background: white !important; }
   .print-pages { display: block !important; width: 210mm !important; margin: 0 !important; padding: 0 !important; }
   .print-page-column { display: block !important; width: 210mm !important; max-width: none !important; margin: 0 !important; padding: 0 !important; flex: none !important; }
@@ -68,4 +83,5 @@
   .page-label { display: none; }
   .a4-page { width: 210mm !important; height: 297mm !important; aspect-ratio: auto; box-shadow: none; }
   .placed-photo, .placed-photo-content, .placed-photo img { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .placed-photo:hover { outline: none; }
 }

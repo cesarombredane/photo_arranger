@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { activePhoto } from '../store/photoStore'
 
-type Side = 'left' | 'right' | 'top' | 'bottom'
+type Side = 'left' | 'right' | 'top' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 const imageBox = ref<HTMLElement>()
 let dragging: Side | null = null
 const minimum = 3
@@ -33,10 +33,10 @@ function moveDrag(event: PointerEvent) {
   if (!photo || !rect || !dragging) return
   const x = Math.max(0, Math.min(100, (event.clientX - rect.left) / rect.width * 100))
   const y = Math.max(0, Math.min(100, (event.clientY - rect.top) / rect.height * 100))
-  if (dragging === 'left') photo.crop.left = Math.min(x, photo.crop.right - minimum)
-  if (dragging === 'right') photo.crop.right = Math.max(x, photo.crop.left + minimum)
-  if (dragging === 'top') photo.crop.top = Math.min(y, photo.crop.bottom - minimum)
-  if (dragging === 'bottom') photo.crop.bottom = Math.max(y, photo.crop.top + minimum)
+  if (dragging.includes('left')) photo.crop.left = Math.min(x, photo.crop.right - minimum)
+  if (dragging.includes('right')) photo.crop.right = Math.max(x, photo.crop.left + minimum)
+  if (dragging.includes('top')) photo.crop.top = Math.min(y, photo.crop.bottom - minimum)
+  if (dragging.includes('bottom')) photo.crop.bottom = Math.max(y, photo.crop.top + minimum)
   photo.cropValidated = false
 }
 function stopDrag() {
@@ -65,6 +65,10 @@ onBeforeUnmount(stopDrag)
       <button class="crop-handle crop-handle--right" :style="{ left: `${activePhoto.crop.right}%`, top: `${activePhoto.crop.top}%`, height: `${activePhoto.crop.bottom-activePhoto.crop.top}%` }" aria-label="Crop right edge" @pointerdown.prevent="startDrag('right',$event)" />
       <button class="crop-handle crop-handle--top" :style="{ left: `${activePhoto.crop.left}%`, top: `${activePhoto.crop.top}%`, width: `${activePhoto.crop.right-activePhoto.crop.left}%` }" aria-label="Crop top edge" @pointerdown.prevent="startDrag('top',$event)" />
       <button class="crop-handle crop-handle--bottom" :style="{ left: `${activePhoto.crop.left}%`, top: `${activePhoto.crop.bottom}%`, width: `${activePhoto.crop.right-activePhoto.crop.left}%` }" aria-label="Crop bottom edge" @pointerdown.prevent="startDrag('bottom',$event)" />
+      <button class="crop-corner crop-corner--top-left" :style="{ left: `${activePhoto.crop.left}%`, top: `${activePhoto.crop.top}%` }" aria-label="Crop top-left corner" @pointerdown.prevent="startDrag('top-left',$event)" />
+      <button class="crop-corner crop-corner--top-right" :style="{ left: `${activePhoto.crop.right}%`, top: `${activePhoto.crop.top}%` }" aria-label="Crop top-right corner" @pointerdown.prevent="startDrag('top-right',$event)" />
+      <button class="crop-corner crop-corner--bottom-left" :style="{ left: `${activePhoto.crop.left}%`, top: `${activePhoto.crop.bottom}%` }" aria-label="Crop bottom-left corner" @pointerdown.prevent="startDrag('bottom-left',$event)" />
+      <button class="crop-corner crop-corner--bottom-right" :style="{ left: `${activePhoto.crop.right}%`, top: `${activePhoto.crop.bottom}%` }" aria-label="Crop bottom-right corner" @pointerdown.prevent="startDrag('bottom-right',$event)" />
     </div>
     <div class="row items-center justify-between q-mt-md"><div class="text-caption text-grey-4">Crop: {{ cropPixels.width }} × {{ cropPixels.height }} px</div><q-btn flat color="primary" icon="restart_alt" label="Reset crop" @click="resetCrop" /></div>
   </div>
