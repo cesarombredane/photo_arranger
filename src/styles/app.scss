@@ -27,7 +27,7 @@
 .crop-shade--bottom { right: 0; bottom: 0; left: 0; }
 .crop-shade--left { left: 0; }
 .crop-shade--right { right: 0; }
-.crop-outline { position: absolute; border: 1px solid white; pointer-events: none; }
+.crop-outline { position: absolute; z-index: 1; padding: 0; border: 1px solid white; background: transparent; cursor: move; touch-action: none; }
 .crop-handle {
   position: absolute;
   z-index: 2;

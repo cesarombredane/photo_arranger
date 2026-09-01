@@ -5,7 +5,7 @@ import { clearSavedProject, deletePhotoFile, loadPhotoFile, loadProject, savePho
 export const state = reactive({
   photos: [] as PhotoItem[],
   templates: [
-    { id: 'small', name: 'Small photo', width: 105, height: 99, color: '#fdd835' },
+    { id: 'small', name: 'Phone photo', width: 70, height: 148, color: '#fdd835' },
     { id: 'medium', name: 'Medium photo', width: 105, height: 148, color: '#fdd835' },
     { id: 'big', name: 'Big photo', width: 210, height: 148, color: '#fdd835' }
   ] as SizeTemplate[],
