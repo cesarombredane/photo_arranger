@@ -1,4 +1,5 @@
 import type { PackedPage, PhotoItem, Placement, SizeTemplate } from '../types'
+import { calculatedPrintSize } from './printSizing'
 
 const A4 = { width: 210, height: 297 }
 type Rect = { x: number; y: number; width: number; height: number }
@@ -30,19 +31,9 @@ function sizePhotos(photos: PhotoItem[], templates: SizeTemplate[], usable: Rect
   return photos.flatMap(photo => {
     const template = templates.find(item => item.id === photo.templateId)
     if (!template) return []
-    const cropWidth = photo.naturalWidth * (photo.crop.right - photo.crop.left) / 100
-    const cropHeight = photo.naturalHeight * (photo.crop.bottom - photo.crop.top) / 100
-    const ratio = cropWidth / cropHeight
-    const targetArea = template.width * template.height
-    let width = Math.sqrt(targetArea * ratio)
-    let height = Math.sqrt(targetArea / ratio)
     const availableWidth = Math.max(0, usable.width - gap)
     const availableHeight = Math.max(0, usable.height - gap)
-    const normalScale = Math.min(availableWidth / width, availableHeight / height)
-    const rotatedScale = Math.min(availableWidth / height, availableHeight / width)
-    const scale = Math.min(1, Math.max(normalScale, rotatedScale))
-    width *= scale
-    height *= scale
+    const { width, height } = calculatedPrintSize(photo, template, { width: availableWidth, height: availableHeight })
     return [{ photo, width, height }]
   })
 }
