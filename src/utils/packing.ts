@@ -91,8 +91,9 @@ function layoutScore(pages: PackedPage[]) {
   return pages.length * 1_000_000 + lastBottom
 }
 
-export function packPhotos(photos: PhotoItem[], templates: SizeTemplate[], margin = 0, gap = 0): PackedPage[] {
-  const usable = { x: margin, y: margin, width: A4.width - margin * 2, height: A4.height - margin * 2 }
+export function packPhotos(photos: PhotoItem[], templates: SizeTemplate[]): PackedPage[] {
+  const gap = 0
+  const usable = { x: 0, y: 0, width: A4.width, height: A4.height }
   if (usable.width <= 0 || usable.height <= 0) return []
   const items = sizePhotos(photos, templates, usable, gap)
   const orderings = [
