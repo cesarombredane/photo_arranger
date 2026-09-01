@@ -6,9 +6,14 @@ import A4Page from './components/A4Page.vue'
 import { activePhoto, importFiles, persistProject, removePhoto, resetProject, restoreProject, state } from './store/photoStore'
 import { packPhotos } from './utils/packing'
 import { loadStep, saveStep } from './utils/persistence'
-const step = ref(loadStep()), input = ref<HTMLInputElement>(), loading = ref(false), initialized = ref(false), showBackWarning = ref(false), showArrangeWarning = ref(false), showLayoutEditor = ref(false)
+import { snapPhotoToTemplate } from './utils/cropping'
+const step = ref(loadStep()), input = ref<HTMLInputElement>(), loading = ref(false), initialized = ref(false), showBackWarning = ref(false), showArrangeWarning = ref(false), showLayoutEditor = ref(false), showBulkPrepare = ref(false)
+const bulkScope = ref<'all' | 'unvalidated' | 'from-current'>('unvalidated')
+const bulkTemplateId = ref('small'), bulkSnap = ref(true), bulkValidate = ref(false)
+const bulkUndo = ref<{ activeIndex: number; photos: { id: string; templateId: string; cropValidated: boolean; crop: { left: number; top: number; right: number; bottom: number } }[] }>()
 const pages = computed(() => packPhotos(state.photos, state.templates))
 const unvalidatedCount = computed(() => state.photos.filter(photo => !photo.cropValidated).length)
+const bulkTargets = computed(() => state.photos.filter((photo, index) => bulkScope.value === 'all' || (bulkScope.value === 'unvalidated' && !photo.cropValidated) || (bulkScope.value === 'from-current' && index >= state.activeIndex)))
 async function receive(files: FileList | null) { if (!files?.length) return; loading.value = true; try { await importFiles([...files]); if (state.photos.length) step.value = 2 } finally { loading.value = false; if (input.value) input.value.value = '' } }
 function printPages() { window.print() }
 function setActiveTemplate(templateId: string) { if (!activePhoto.value) return; activePhoto.value.templateId = templateId; activePhoto.value.cropValidated = false }
@@ -18,6 +23,31 @@ function reviewUnvalidated() { const index = state.photos.findIndex(photo => !ph
 function arrangeAnyway() { showArrangeWarning.value = false; step.value = 3 }
 function editFromLayout(photoId: string) { const index = state.photos.findIndex(photo => photo.id === photoId); if (index < 0) return; state.activeIndex = index; showLayoutEditor.value = true }
 function validateLayoutEdit() { if (activePhoto.value) activePhoto.value.cropValidated = true; showLayoutEditor.value = false }
+function applyBulkPrepare() {
+  const targets = bulkTargets.value
+  const template = state.templates.find(item => item.id === bulkTemplateId.value)
+  if (!targets.length || !template) return
+  bulkUndo.value = { activeIndex: state.activeIndex, photos: targets.map(photo => ({ id: photo.id, templateId: photo.templateId, cropValidated: photo.cropValidated, crop: { ...photo.crop } })) }
+  for (const photo of targets) {
+    photo.templateId = template.id
+    if (bulkSnap.value) snapPhotoToTemplate(photo, template)
+    else photo.cropValidated = false
+    if (bulkValidate.value) photo.cropValidated = true
+  }
+  const firstIndex = state.photos.findIndex(photo => photo.id === targets[0].id)
+  if (firstIndex >= 0) state.activeIndex = firstIndex
+  showBulkPrepare.value = false
+}
+function undoBulkPrepare() {
+  const undo = bulkUndo.value
+  if (!undo) return
+  for (const previous of undo.photos) {
+    const photo = state.photos.find(item => item.id === previous.id)
+    if (photo) { photo.templateId = previous.templateId; photo.cropValidated = previous.cropValidated; photo.crop = { ...previous.crop } }
+  }
+  state.activeIndex = Math.min(undo.activeIndex, Math.max(0, state.photos.length - 1))
+  bulkUndo.value = undefined
+}
 async function confirmBack() { loading.value = true; try { await resetProject(); step.value = 1; showBackWarning.value = false } finally { loading.value = false } }
 onMounted(async () => {
   try { await restoreProject(); if (!state.photos.length) step.value = 1 } finally { initialized.value = true }
@@ -36,7 +66,7 @@ onMounted(async () => {
     </section>
 
     <section v-else-if="step === 2">
-      <div class="row items-center justify-between q-mb-lg"><div><div class="text-overline text-primary">Prepare photos</div><div class="text-h4 text-weight-bold">Crop and choose a size</div></div><q-badge color="primary" text-color="black" class="q-pa-sm">{{ state.activeIndex + 1 }} / {{ state.photos.length }}</q-badge></div>
+      <div class="row items-center justify-between q-mb-lg"><div><div class="text-overline text-primary">Prepare photos</div><div class="text-h4 text-weight-bold">Crop and choose a size</div></div><div class="row items-center q-gutter-sm"><q-btn v-if="bulkUndo" outline color="primary" icon="undo" label="Undo bulk change" @click="undoBulkPrepare" /><q-btn color="primary" text-color="black" icon="auto_fix_high" label="Bulk prepare" @click="showBulkPrepare=true" /><q-badge color="primary" text-color="black" class="q-pa-sm">{{ state.activeIndex + 1 }} / {{ state.photos.length }}</q-badge></div></div>
       <div class="row q-col-gutter-lg items-start">
         <aside class="col-12 col-md-3 col-lg-2"><q-card flat bordered class="bg-grey-10 text-white"><q-card-section class="row items-center justify-between"><div class="text-h6">Photos</div><q-btn flat round dense color="primary" icon="add_photo_alternate" @click="input?.click()" /></q-card-section><q-separator dark /><q-list separator class="photo-list"><q-item v-for="(photo, index) in state.photos" :key="photo.id" clickable :active="index === state.activeIndex" active-class="bg-grey-9 text-primary" @click="state.activeIndex=index"><q-item-section avatar><q-img :src="photo.url" width="52px" height="52px" fit="cover" /></q-item-section><q-item-section><q-item-label lines="1">{{ photo.name }}</q-item-label><q-item-label caption class="text-grey-5">Photo {{ index + 1 }}</q-item-label></q-item-section><q-item-section v-if="photo.cropValidated" side><q-icon name="check_circle" color="positive" size="24px"><q-tooltip>Crop validated</q-tooltip></q-icon></q-item-section></q-item></q-list></q-card></aside>
         <div class="col-12 col-md-6 col-lg-7"><q-card flat bordered class="bg-grey-10 text-white"><q-card-section><PhotoCropper /></q-card-section></q-card></div>
@@ -52,6 +82,7 @@ onMounted(async () => {
     <input ref="input" hidden multiple type="file" accept="image/*" @change="receive(($event.target as HTMLInputElement).files)" /><q-inner-loading :showing="loading || !initialized" dark><q-spinner color="primary" size="48px" /></q-inner-loading>
     <q-dialog v-model="showBackWarning" persistent><q-card class="bg-grey-10 text-white" style="width: 460px; max-width: 94vw"><q-card-section class="row items-center q-gutter-md"><q-icon name="warning" color="negative" size="36px" /><div><div class="text-h6">Erase this project?</div><div class="text-body2 text-grey-4">Going back will remove every imported photo, crop, size choice, and validation.</div></div></q-card-section><q-card-actions align="right"><q-btn flat color="grey-4" label="Keep working" v-close-popup /><q-btn color="negative" icon="delete_forever" label="Erase and go back" @click="confirmBack" /></q-card-actions></q-card></q-dialog>
     <q-dialog v-model="showArrangeWarning" persistent><q-card class="bg-grey-10 text-white" style="width: 480px; max-width: 94vw"><q-card-section class="row items-center q-gutter-md"><q-icon name="warning" color="primary" size="36px" /><div><div class="text-h6">Some crops are not validated</div><div class="text-body2 text-grey-4">{{ unvalidatedCount }} photo{{ unvalidatedCount === 1 ? '' : 's' }} still need{{ unvalidatedCount === 1 ? 's' : '' }} review. You can arrange them using their current crops or return to finish reviewing.</div></div></q-card-section><q-card-actions align="right"><q-btn flat color="grey-4" label="Review photos" @click="reviewUnvalidated" /><q-btn color="primary" text-color="black" icon="auto_awesome_mosaic" label="Arrange anyway" @click="arrangeAnyway" /></q-card-actions></q-card></q-dialog>
+    <q-dialog v-model="showBulkPrepare" persistent><q-card class="bg-grey-10 text-white" style="width: 560px; max-width: 94vw"><q-card-section><div class="text-h6">Bulk prepare photos</div><div class="text-body2 text-grey-4">Apply the same size and crop behavior to many photos at once.</div></q-card-section><q-separator dark /><q-card-section class="q-gutter-lg"><div><div class="text-subtitle2 q-mb-sm">Which photos?</div><q-option-group v-model="bulkScope" :options="[{label:'All photos',value:'all'},{label:'Unvalidated photos only',value:'unvalidated'},{label:'Current photo onward',value:'from-current'}]" color="primary" type="radio" /></div><q-select v-model="bulkTemplateId" dark outlined emit-value map-options label="Photo size" :options="state.templates.map(t => ({ label: `${t.name} — ${t.width} × ${t.height} mm`, value: t.id }))" /><div><q-toggle v-model="bulkSnap" color="primary" label="Snap each photo to its largest optimized crop" /><div class="text-caption text-grey-5 q-ml-xl">This centers every crop. Review afterward to reposition important subjects.</div></div><div><q-toggle v-model="bulkValidate" color="primary" label="Mark affected photos as validated" /><div class="text-caption text-grey-5 q-ml-xl">Leave this off if you want to review each composition.</div></div><q-banner class="bg-grey-9 text-white rounded-borders"><template #avatar><q-icon name="auto_fix_high" color="primary" /></template><b>{{ bulkTargets.length }} photo{{ bulkTargets.length === 1 ? '' : 's' }}</b> will use {{ state.templates.find(t => t.id === bulkTemplateId)?.name }}.<div class="text-caption text-grey-4">{{ bulkSnap ? 'Optimized crop will be applied.' : 'Existing crop will be kept.' }} {{ bulkValidate ? 'Photos will be validated.' : 'Photos will remain ready for review.' }}</div></q-banner></q-card-section><q-card-actions align="right"><q-btn flat color="grey-4" label="Cancel" v-close-popup /><q-btn color="primary" text-color="black" icon="done_all" label="Apply bulk changes" :disable="bulkTargets.length === 0" @click="applyBulkPrepare" /></q-card-actions></q-card></q-dialog>
     <q-dialog v-model="showLayoutEditor" persistent maximized transition-show="slide-up" transition-hide="slide-down"><q-card class="bg-dark text-white"><q-toolbar class="bg-grey-10"><q-icon name="crop" color="primary" size="28px" class="q-mr-md" /><q-toolbar-title>Edit photo</q-toolbar-title><q-btn flat round dense icon="close" @click="showLayoutEditor=false" /></q-toolbar><q-card-section v-if="activePhoto" class="row q-col-gutter-xl q-pa-lg"><div class="col-12 col-md-9"><q-card flat bordered class="bg-grey-10 text-white"><q-card-section><PhotoCropper /></q-card-section></q-card></div><div class="col-12 col-md-3"><q-card flat bordered class="bg-grey-10 text-white"><q-card-section><div class="text-overline text-primary">Photo size</div><div class="text-subtitle1 ellipsis q-mb-sm">{{ activePhoto.name }}</div><div class="text-caption text-grey-5 q-mb-md">Dimensions are approximate unless you use “Snap to optimized ratio”.</div><q-option-group :model-value="activePhoto.templateId" :options="state.templates.map(t => ({ label: `${t.name} — ${t.width} × ${t.height} mm`, value: t.id }))" color="primary" type="radio" @update:model-value="setActiveTemplate" /></q-card-section><q-separator dark /><q-card-actions vertical><q-btn class="full-width" color="positive" icon="check_circle" label="Validate and close" @click="validateLayoutEdit" /><q-btn flat class="full-width" color="grey-4" label="Close" @click="showLayoutEditor=false" /></q-card-actions></q-card></div></q-card-section></q-card></q-dialog>
   </q-page></q-page-container></q-layout>
 </template>
