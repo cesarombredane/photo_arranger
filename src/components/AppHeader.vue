@@ -1,6 +1,11 @@
 <template>
-  <header class="app-header">
-    <div class="brand"><div class="brand-mark"><q-icon name="photo_size_select_large" /></div><div><strong>Paperfit</strong><span>photo arranger</span></div></div>
-    <div class="header-note"><q-icon name="eco" /> Print more. Waste less.</div>
-  </header>
+  <q-header elevated class="bg-grey-10 text-white">
+    <q-toolbar>
+      <q-toolbar-title class="row items-center q-gutter-sm">
+        <q-icon name="photo_size_select_large" color="primary" />
+        <span>Photo Arranger</span>
+      </q-toolbar-title>
+      <q-btn flat round dense icon="help_outline"><q-tooltip>Prepare photos and fit them onto A4 sheets</q-tooltip></q-btn>
+    </q-toolbar>
+  </q-header>
 </template>

@@ -2,6 +2,10 @@
 defineProps<{ step: number }>()
 defineEmits<{ (event: 'select', step: number): void }>()
 </script>
-<template><nav class="steps">
-  <button v-for="(item, index) in [{icon:'add_photo_alternate',label:'Add photos'},{icon:'crop',label:'Prepare'},{icon:'auto_awesome_mosaic',label:'Arrange & print'}]" :key="item.label" :class="{active: step === index + 1, done: step > index + 1}" @click="$emit('select', index + 1)"><span>{{ index + 1 }}</span><q-icon :name="item.icon" />{{ item.label }}</button>
-</nav></template>
+<template>
+  <q-tabs :model-value="step" active-color="primary" indicator-color="primary" align="center" class="text-grey-5 q-mb-lg" @update:model-value="$emit('select', Number($event))">
+    <q-tab :name="1" icon="add_photo_alternate" label="Add photos" />
+    <q-tab :name="2" icon="crop" label="Prepare" />
+    <q-tab :name="3" icon="auto_awesome_mosaic" label="Arrange & print" />
+  </q-tabs>
+</template>
