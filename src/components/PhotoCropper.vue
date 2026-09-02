@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { activePhoto, state } from '../store/photoStore'
-import { snapPhotoToTemplate } from '../utils/cropping'
+import { nearestTemplateRatio, rotateOptimizedCrop, snapCurrentCropToTemplate } from '../utils/cropping'
 
 type Side = 'left' | 'right' | 'top' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'move'
 const imageBox = ref<HTMLElement>()
@@ -48,11 +48,58 @@ function moveDrag(event: PointerEvent) {
     photo.cropValidated = false
     return
   }
-  if (dragging.includes('left')) photo.crop.left = Math.min(x, photo.crop.right - minimum)
-  if (dragging.includes('right')) photo.crop.right = Math.max(x, photo.crop.left + minimum)
-  if (dragging.includes('top')) photo.crop.top = Math.min(y, photo.crop.bottom - minimum)
-  if (dragging.includes('bottom')) photo.crop.bottom = Math.max(y, photo.crop.top + minimum)
+  if (photo.forceOptimizedRatio && dragOrigin) resizeAtOptimizedRatio(photo, x, y)
+  else {
+    if (dragging.includes('left')) photo.crop.left = Math.min(x, photo.crop.right - minimum)
+    if (dragging.includes('right')) photo.crop.right = Math.max(x, photo.crop.left + minimum)
+    if (dragging.includes('top')) photo.crop.top = Math.min(y, photo.crop.bottom - minimum)
+    if (dragging.includes('bottom')) photo.crop.bottom = Math.max(y, photo.crop.top + minimum)
+  }
   photo.cropValidated = false
+}
+function resizeAtOptimizedRatio(photo: NonNullable<typeof activePhoto.value>, x: number, y: number) {
+  if (!dragOrigin || !dragging) return
+  const template = state.templates.find(item => item.id === photo.templateId)
+  if (!template) return
+  const percentRatio = nearestTemplateRatio(photo, template) / imageAspect.value
+  let left = dragOrigin.left, right = dragOrigin.right, top = dragOrigin.top, bottom = dragOrigin.bottom
+  const horizontal = dragging.includes('left') || dragging.includes('right')
+  const vertical = dragging.includes('top') || dragging.includes('bottom')
+  if (horizontal && vertical) {
+    const anchorX = dragging.includes('left') ? dragOrigin.right : dragOrigin.left
+    const anchorY = dragging.includes('top') ? dragOrigin.bottom : dragOrigin.top
+    let width = Math.max(minimum, Math.abs(x - anchorX))
+    let height = Math.max(minimum, Math.abs(y - anchorY))
+    if (width / height > percentRatio) width = height * percentRatio
+    else height = width / percentRatio
+    const scale = Math.min(1, (dragging.includes('left') ? anchorX : 100 - anchorX) / width, (dragging.includes('top') ? anchorY : 100 - anchorY) / height)
+    width *= scale; height *= scale
+    left = dragging.includes('left') ? anchorX - width : anchorX
+    right = dragging.includes('right') ? anchorX + width : anchorX
+    top = dragging.includes('top') ? anchorY - height : anchorY
+    bottom = dragging.includes('bottom') ? anchorY + height : anchorY
+  } else if (horizontal) {
+    const anchorX = dragging.includes('left') ? dragOrigin.right : dragOrigin.left
+    let width = Math.max(minimum, Math.abs(x - anchorX))
+    let height = width / percentRatio
+    const centerY = (dragOrigin.top + dragOrigin.bottom) / 2
+    const scale = Math.min(1, (dragging.includes('left') ? anchorX : 100 - anchorX) / width, 2 * Math.min(centerY, 100 - centerY) / height)
+    width *= scale; height *= scale
+    left = dragging.includes('left') ? anchorX - width : anchorX
+    right = dragging.includes('right') ? anchorX + width : anchorX
+    top = centerY - height / 2; bottom = centerY + height / 2
+  } else if (vertical) {
+    const anchorY = dragging.includes('top') ? dragOrigin.bottom : dragOrigin.top
+    let height = Math.max(minimum, Math.abs(y - anchorY))
+    let width = height * percentRatio
+    const centerX = (dragOrigin.left + dragOrigin.right) / 2
+    const scale = Math.min(1, (dragging.includes('top') ? anchorY : 100 - anchorY) / height, 2 * Math.min(centerX, 100 - centerX) / width)
+    width *= scale; height *= scale
+    top = dragging.includes('top') ? anchorY - height : anchorY
+    bottom = dragging.includes('bottom') ? anchorY + height : anchorY
+    left = centerX - width / 2; right = centerX + width / 2
+  }
+  photo.crop = { left, top, right, bottom }
 }
 function stopDrag() {
   dragging = null
@@ -62,14 +109,22 @@ function stopDrag() {
 function resetCrop() {
   if (!activePhoto.value) return
   activePhoto.value.crop = { left: 0, top: 0, right: 100, bottom: 100 }
+  activePhoto.value.forceOptimizedRatio = false
   activePhoto.value.cropValidated = false
 }
-function snapToOptimizedRatio() {
+function setForceOptimizedRatio(enabled: boolean) {
   const photo = activePhoto.value
   if (!photo) return
   const template = state.templates.find(item => item.id === photo.templateId)
   if (!template) return
-  snapPhotoToTemplate(photo, template)
+  photo.forceOptimizedRatio = enabled
+  if (enabled) snapCurrentCropToTemplate(photo, template)
+}
+function rotateSelection() {
+  const photo = activePhoto.value
+  if (!photo?.forceOptimizedRatio) return
+  const template = state.templates.find(item => item.id === photo.templateId)
+  if (template) rotateOptimizedCrop(photo, template)
 }
 onBeforeUnmount(stopDrag)
 </script>
@@ -93,6 +148,6 @@ onBeforeUnmount(stopDrag)
       <button class="crop-corner crop-corner--bottom-left" :style="{ left: `${activePhoto.crop.left}%`, top: `${activePhoto.crop.bottom}%` }" aria-label="Crop bottom-left corner" @pointerdown.prevent="startDrag('bottom-left',$event)" />
       <button class="crop-corner crop-corner--bottom-right" :style="{ left: `${activePhoto.crop.right}%`, top: `${activePhoto.crop.bottom}%` }" aria-label="Crop bottom-right corner" @pointerdown.prevent="startDrag('bottom-right',$event)" />
     </div>
-    <div class="row items-center justify-between q-mt-md"><div class="text-caption text-grey-4">Crop: {{ cropPixels.width }} × {{ cropPixels.height }} px</div><div class="q-gutter-sm"><q-btn outline color="primary" icon="aspect_ratio" label="Snap to optimized ratio" @click="snapToOptimizedRatio"><q-tooltip>Match the selected photo size for a more efficient layout</q-tooltip></q-btn><q-btn flat color="primary" icon="restart_alt" label="Reset crop" @click="resetCrop" /></div></div>
+    <div class="row items-center justify-between q-mt-md"><div class="text-caption text-grey-4">Crop: {{ cropPixels.width }} × {{ cropPixels.height }} px</div><div class="row items-center q-gutter-sm"><q-checkbox :model-value="!!activePhoto.forceOptimizedRatio" color="primary" label="Force optimized ratio" @update:model-value="setForceOptimizedRatio(!!$event)"><q-tooltip>Snap to the nearest optimized ratio and keep it while resizing</q-tooltip></q-checkbox><q-btn v-if="activePhoto.forceOptimizedRatio" outline color="primary" icon="screen_rotation" label="Rotate selection" @click="rotateSelection"><q-tooltip>Switch between portrait and landscape</q-tooltip></q-btn><q-btn flat color="primary" icon="restart_alt" label="Reset crop" @click="resetCrop" /></div></div>
   </div>
 </template>

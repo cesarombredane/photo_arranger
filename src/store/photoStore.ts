@@ -26,7 +26,7 @@ export async function importFiles(files: File[]) {
     const id = crypto.randomUUID()
     const url = URL.createObjectURL(file)
     const image = new Image()
-    image.onload = async () => { await savePhotoFile(id, file); resolve({ id, name: file.name, url, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight, templateId: state.templates[0].id, crop: { left: 0, top: 0, right: 100, bottom: 100 }, cropValidated: false }) }
+    image.onload = async () => { await savePhotoFile(id, file); resolve({ id, name: file.name, url, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight, templateId: state.templates[0].id, crop: { left: 0, top: 0, right: 100, bottom: 100 }, cropValidated: false, forceOptimizedRatio: false }) }
     image.onerror = () => { URL.revokeObjectURL(url); reject(new Error(`Could not load ${file.name}`)) }
     image.src = url
   })))
