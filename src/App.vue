@@ -14,6 +14,7 @@
   } from "./store/photoStore";
   import { packPhotos } from "./utils/packing";
   import { loadStep, saveStep } from "./utils/persistence";
+  import { createPhotoPdf, downloadPdf } from "./utils/pdf";
   import {
     snapCurrentCropToTemplate,
     snapPhotoToTemplate,
@@ -34,7 +35,10 @@
     showLayoutEditor = ref(false),
     showBulkPrepare = ref(false),
     showDpiHelp = ref(false),
-    showShortcuts = ref(false);
+    showShortcuts = ref(false),
+    creatingPdf = ref(false),
+    pdfProgress = ref({ done: 0, total: 0 }),
+    pdfError = ref("");
 
   const bulkScope = ref<"all" | "unvalidated" | "from-current">("unvalidated");
 
@@ -105,8 +109,20 @@
     }
   }
 
-  function printPages() {
-    window.print();
+  async function downloadPages() {
+    creatingPdf.value = true;
+    pdfError.value = "";
+    pdfProgress.value = { done: 0, total: state.photos.length };
+    try {
+      const pdf = await createPhotoPdf(pages.value, (done, total) => {
+        pdfProgress.value = { done, total };
+      });
+      downloadPdf(pdf, `photo-sheets-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (error) {
+      pdfError.value = error instanceof Error ? error.message : "Could not create the PDF.";
+    } finally {
+      creatingPdf.value = false;
+    }
   }
 
   function setActiveTemplate(templateId: string) {
@@ -421,10 +437,17 @@
               </div>
             </div>
             <div class="q-gutter-sm">
-              <q-btn outline color="primary" icon="edit" label="Edit photos" @click="step = 2" /><q-btn color="primary" text-color="black" icon="print"
-                label="Print sheets" @click="printPages" />
+              <q-btn outline color="primary" icon="edit" label="Edit photos" @click="step = 2" /><q-btn color="primary" text-color="black" icon="download"
+                label="Download PDF" :loading="creatingPdf" @click="downloadPages" />
             </div>
           </div>
+          <q-banner v-if="creatingPdf" class="bg-grey-9 text-white rounded-borders q-mb-lg">
+            Creating the full-resolution PDF… {{ pdfProgress.done }} / {{ pdfProgress.total }} photos
+            <q-linear-progress class="q-mt-sm" color="primary" :value="pdfProgress.total ? pdfProgress.done / pdfProgress.total : 0" />
+          </q-banner>
+          <q-banner v-if="pdfError" class="bg-red-10 text-white rounded-borders q-mb-lg">
+            {{ pdfError }}
+          </q-banner>
           <div class="print-pages row q-col-gutter-xl justify-center">
             <div v-for="(page, index) in pages" :key="index" class="print-page-column col-12 col-sm-6 col-lg-4">
               <A4Page :page="page" :number="index + 1" @photo-click="editFromLayout($event.id)" />
